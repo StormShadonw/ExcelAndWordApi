@@ -46,29 +46,36 @@ namespace ExcelAndWordApi.Controllers
         {
             try
             {
-                List<string> datos = new List<string>();
+                ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+                var filePath = Path.Combine(this.filePath, this.fileName); // Reemplaza con la ruta de tu archivo Excel
+                FileInfo fileInfo = new FileInfo(filePath);
+                var data = new List<List<object>>();
 
-                string filePath = Path.Combine(Directory.GetCurrentDirectory(), "ArchivosExcel.xlsx");
-                Application excelApp = new Application();
-                Excel.Workbook workbook = excelApp.Workbooks.Open(filePath);
-                Excel.Worksheet worksheet = (Excel.Worksheet)workbook.Sheets[1]; // Hoja 1
-
-                // Suponiendo que quieres leer datos en un rango específico, por ejemplo, A1:B10
-                Excel.Range range = worksheet.Range["A1:B10"];
-
-                foreach (Excel.Range cell in range)
+                using (var package = new ExcelPackage(fileInfo))
                 {
-                    // Agregar el valor de cada celda a la lista de datos
-                    datos.Add(cell.Value.ToString());
+                    var workbook = package.Workbook;
+                    var worksheet = workbook.Worksheets.FirstOrDefault();
+                    
+                    if (worksheet != null)
+                    {
+                        var data1 = worksheet.Rows.Range.Value as object[,];
+                        for (var c = 0; c < worksheet.Dimension.End.Row; c++) {
+                            List<object> datos = new List<object>();
+                            for(var d = 0; d < worksheet.Columns.EndColumn; d++)
+                            {
+                                datos.Add(data1[c, d]);
+                            }
+                            data.Add(datos);
+                        }
+                        return Ok(data);
+                    }
                 }
 
-                // Cerrar el archivo Excel sin guardar cambios
-                workbook.Close(false);
-                excelApp.Quit();
-                return Ok(datos);
-            } catch (Exception ex)
+                return NotFound("No se encontró la hoja de Excel o no se leyeron datos.");
+            }
+            catch (Exception ex)
             {
-                return StatusCode(500, ex.Message);
+                return BadRequest($"Error al leer el archivo Excel: {ex.Message}");
             }
 
         }

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using ExcelAndWordApi.Models;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting.Internal;
 using OfficeOpenXml;
 
@@ -12,8 +13,7 @@ namespace ExcelAndWordApi.Controllers
         //string filePath = Path.Combine(Directory.GetCurrentDirectory(), "Excel");
         string fileName = "Data.xlsx";
         string sheetName = "Hoja1";
-
-        [HttpPost]
+        [HttpPost("Create-file")]
         public IActionResult CreateFile()
         {
             try
@@ -41,6 +41,47 @@ namespace ExcelAndWordApi.Controllers
             }
 
         }
+
+        [HttpPost]
+        public IActionResult Index([FromBody] Person body)
+        {
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            var package = new ExcelPackage(new FileInfo(Path.Combine(filePath, fileName)));
+            var worksheet = package.Workbook.Worksheets[sheetName]; // Cambia "MiHoja" al nombre de tu hoja
+            var indextoInsert = worksheet.Dimension.End.Row + 1;
+            worksheet.InsertRow(indextoInsert, 1);
+            worksheet.Cells["A" + indextoInsert].Value = body.Name;
+            worksheet.Cells["B" + indextoInsert].Value = body.Age;
+            package.Save();
+            return Ok();
+        }
+
+        [HttpPut]
+        public IActionResult Index(int index, [FromBody] Person body)
+        {
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+            var package = new ExcelPackage(new FileInfo(Path.Combine(filePath, fileName)));
+            var worksheet = package.Workbook.Worksheets[sheetName]; // Cambia "MiHoja" al nombre de tu hoja
+            var rowToUpdate = worksheet.Cells["A" + index + ":B" + index];
+            rowToUpdate["A" + index].Value = body.Name;
+            rowToUpdate["B" + index].Value = body.Age;
+            package.Save();
+            return Ok();
+        }
+
+        [HttpDelete]
+        public IActionResult Index(int index)
+        {
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+            var package = new ExcelPackage(new FileInfo(Path.Combine(filePath, fileName)));
+            var worksheet = package.Workbook.Worksheets[sheetName]; // Cambia "MiHoja" al nombre de tu hoja
+            worksheet.DeleteRow(index);
+            package.Save();
+            return Ok();
+        }
+
         [HttpGet]
         public IActionResult Index()
         {
@@ -72,6 +113,27 @@ namespace ExcelAndWordApi.Controllers
                 }
 
                 return NotFound("No se encontró la hoja de Excel o no se leyeron datos.");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error al leer el archivo Excel: {ex.Message}");
+            }
+
+        }
+
+        [HttpGet("download-file")]
+        public IActionResult DownloadFile()
+        {
+            try
+            {
+                var rutaArchivo = Path.Combine(filePath, fileName);
+                if (!System.IO.File.Exists(rutaArchivo))
+                {
+                    return NotFound("El archivo Excel no existe.");
+                }
+                var bytes = System.IO.File.ReadAllBytes(rutaArchivo);
+                var contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                return File(bytes, contentType, "Data.xlsx");
             }
             catch (Exception ex)
             {

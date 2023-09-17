@@ -56,7 +56,7 @@ namespace ExcelAndWordApi.Controllers
             return Ok();
         }
 
-        [HttpPut]
+        [HttpPut("{index}")]
         public IActionResult Index(int index, [FromBody] Person body)
         {
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
@@ -70,7 +70,7 @@ namespace ExcelAndWordApi.Controllers
             return Ok();
         }
 
-        [HttpDelete]
+        [HttpDelete("{index}")]
         public IActionResult Index(int index)
         {
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;

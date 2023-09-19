@@ -1,4 +1,6 @@
-﻿using ExcelAndWordApi.Models;
+﻿using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using ExcelAndWordApi.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting.Internal;
 using OfficeOpenXml;
@@ -122,18 +124,34 @@ namespace ExcelAndWordApi.Controllers
         }
 
         [HttpGet("download-file")]
-        public IActionResult DownloadFile()
+        public async Task<IActionResult> DownloadFile()
         {
             try
             {
-                var rutaArchivo = Path.Combine(filePath, fileName);
-                if (!System.IO.File.Exists(rutaArchivo))
+                string connectionString = "DefaultEndpointsProtocol=https;AccountName=riascosservicesstorage;AccountKey=ycHtf5e4s/n4dH4dCnr9ayVro8Ka0nywY9uqwJba50mn1LGfZM6CWI2pTclU3XWnSHom8oc5oc9L+AStqBHiKA==;EndpointSuffix=core.windows.net"; // Debes reemplazar con tu cadena de conexión real
+                string containerName = "generalcontainer";
+                string blobName = "Document.docx";
+
+                BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
+                BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+                BlobClient blobClient = containerClient.GetBlobClient(blobName);
+                var exits = await blobClient.ExistsAsync();
+                if (exits)
+                {
+                    BlobDownloadInfo blobDownloadInfo = await blobClient.DownloadAsync();
+                    MemoryStream memoryStream = new MemoryStream();
+                    await blobDownloadInfo.Content.CopyToAsync(memoryStream);
+                    byte[] blobBytes = memoryStream.ToArray();
+                    var contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    return File(blobBytes, contentType, "Data.xlsx");
+
+
+                }
+                else
                 {
                     return NotFound("El archivo Excel no existe.");
                 }
-                var bytes = System.IO.File.ReadAllBytes(rutaArchivo);
-                var contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-                return File(bytes, contentType, "Data.xlsx");
+
             }
             catch (Exception ex)
             {

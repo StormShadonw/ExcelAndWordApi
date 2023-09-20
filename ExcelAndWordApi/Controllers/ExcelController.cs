@@ -11,100 +11,109 @@ namespace ExcelAndWordApi.Controllers
     [Route("[controller]")]
     public class ExcelController : ControllerBase
     {
-        string filePath = Path.Combine("C:", "Excel");
-        //string filePath = Path.Combine(Directory.GetCurrentDirectory(), "Excel");
-        string fileName = "Data.xlsx";
         string sheetName = "Hoja1";
-        [HttpPost("Create-file")]
-        public IActionResult CreateFile()
+        string connectionString = "DefaultEndpointsProtocol=https;AccountName=riascosservicesstorage;AccountKey=ycHtf5e4s/n4dH4dCnr9ayVro8Ka0nywY9uqwJba50mn1LGfZM6CWI2pTclU3XWnSHom8oc5oc9L+AStqBHiKA==;EndpointSuffix=core.windows.net";
+        string containerName = "generalcontainer";
+
+        [HttpPost]
+        public async Task<IActionResult> Index(string documentId, [FromBody] Person body)
         {
             try
             {
-                ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+                var blob = await getBlobClient(connectionString, containerName, documentId);
+                Stream memoryStream = blob.DownloadStreamingAsync().Result.Value.Content;
+                var package = new ExcelPackage(memoryStream);
+                var worksheet = package.Workbook.Worksheets[sheetName]; // Cambia "MiHoja" al nombre de tu hoja
+                var indextoInsert = worksheet.Dimension.End.Row + 1;
+                worksheet.InsertRow(indextoInsert, 1);
+                worksheet.Cells["A" + indextoInsert].Value = body.Name;
+                worksheet.Cells["B" + indextoInsert].Value = body.Age;
+                package.Save();
+                uploadBlob(blob, package.Stream);
 
-                string fullPath = Path.Combine(filePath, fileName);
-                if (!Directory.Exists(filePath))
-                {
-                    Directory.CreateDirectory(filePath);
-                }
-                using (var package = new ExcelPackage())
-                {
-                    package.Workbook.Worksheets.Add(sheetName);
-                    // Rellenar el archivo Excel como se hizo en el ejemplo anterior
-
-                    // Guardar el paquete en la ubicación deseada
-                    System.IO.File.WriteAllBytes(fullPath, package.GetAsByteArray());
-                }
-                return Ok(new { FilePath = fullPath });
+                return Ok();
             }
             catch (Exception ex)
             {
-                return StatusCode(500, ex.Message);
+                return BadRequest(ex.Message);
             }
 
         }
 
-        [HttpPost]
-        public IActionResult Index([FromBody] Person body)
+        async void uploadBlob(BlobClient blob, Stream stream)
         {
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-            var package = new ExcelPackage(new FileInfo(Path.Combine(filePath, fileName)));
-            var worksheet = package.Workbook.Worksheets[sheetName]; // Cambia "MiHoja" al nombre de tu hoja
-            var indextoInsert = worksheet.Dimension.End.Row + 1;
-            worksheet.InsertRow(indextoInsert, 1);
-            worksheet.Cells["A" + indextoInsert].Value = body.Name;
-            worksheet.Cells["B" + indextoInsert].Value = body.Age;
-            package.Save();
-            return Ok();
+            stream.Position = 0;
+            blob.Upload(stream, overwrite: true);
         }
 
         [HttpPut("{index}")]
-        public IActionResult Index(int index, [FromBody] Person body)
+        public async Task<IActionResult> Index(string documentId, int index, [FromBody] Person body)
         {
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
-            var package = new ExcelPackage(new FileInfo(Path.Combine(filePath, fileName)));
+            var blob = await getBlobClient(connectionString, containerName, documentId);
+            Stream memoryStream = blob.DownloadStreamingAsync().Result.Value.Content;
+            var package = new ExcelPackage(memoryStream);
             var worksheet = package.Workbook.Worksheets[sheetName]; // Cambia "MiHoja" al nombre de tu hoja
             var rowToUpdate = worksheet.Cells["A" + index + ":B" + index];
             rowToUpdate["A" + index].Value = body.Name;
             rowToUpdate["B" + index].Value = body.Age;
             package.Save();
+            uploadBlob(blob, package.Stream);
             return Ok();
+
         }
 
         [HttpDelete("{index}")]
-        public IActionResult Index(int index)
+        public async Task<IActionResult> Index(string documentId, int index)
         {
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
-            var package = new ExcelPackage(new FileInfo(Path.Combine(filePath, fileName)));
+            var blob = await getBlobClient(connectionString, containerName, documentId);
+            Stream memoryStream = blob.DownloadStreamingAsync().Result.Value.Content;
+            var package = new ExcelPackage(memoryStream);
             var worksheet = package.Workbook.Worksheets[sheetName]; // Cambia "MiHoja" al nombre de tu hoja
             worksheet.DeleteRow(index);
             package.Save();
+            uploadBlob(blob, package.Stream);
             return Ok();
         }
 
+        async Task<BlobClient> getBlobClient(string connectionString, string containerName, string blobName)
+        {
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+            BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
+            BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+            BlobClient blobClient = containerClient.GetBlobClient(blobName);
+            if (await blobClient.ExistsAsync())
+            {
+                return blobClient;
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+
+
         [HttpGet]
-        public IActionResult Index()
+        public async Task<IActionResult> Index(string documentId)
         {
             try
             {
-                ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-                var filePath = Path.Combine(this.filePath, this.fileName); // Reemplaza con la ruta de tu archivo Excel
-                FileInfo fileInfo = new FileInfo(filePath);
+                var blob = await getBlobClient(connectionString, containerName, documentId);
+                Stream memoryStream = blob.DownloadStreamingAsync().Result.Value.Content;
                 var data = new List<List<object>>();
-
-                using (var package = new ExcelPackage(fileInfo))
+                using (var package = new ExcelPackage(memoryStream))
                 {
                     var workbook = package.Workbook;
                     var worksheet = workbook.Worksheets.FirstOrDefault();
-                    
+
                     if (worksheet != null)
                     {
                         var data1 = worksheet.Rows.Range.Value as object[,];
-                        for (var c = 0; c < worksheet.Dimension.End.Row; c++) {
+                        for (var c = 0; c < worksheet.Dimension.End.Row; c++)
+                        {
                             List<object> datos = new List<object>();
-                            for(var d = 0; d < worksheet.Columns.EndColumn; d++)
+                            for (var d = 0; d < worksheet.Columns.EndColumn; d++)
                             {
                                 datos.Add(data1[c, d]);
                             }
@@ -115,6 +124,8 @@ namespace ExcelAndWordApi.Controllers
                 }
 
                 return NotFound("No se encontró la hoja de Excel o no se leyeron datos.");
+
+
             }
             catch (Exception ex)
             {
@@ -124,34 +135,17 @@ namespace ExcelAndWordApi.Controllers
         }
 
         [HttpGet("download-file")]
-        public async Task<IActionResult> DownloadFile()
+        public async Task<IActionResult> DownloadFile(string documentId)
         {
             try
             {
-                string connectionString = "DefaultEndpointsProtocol=https;AccountName=riascosservicesstorage;AccountKey=ycHtf5e4s/n4dH4dCnr9ayVro8Ka0nywY9uqwJba50mn1LGfZM6CWI2pTclU3XWnSHom8oc5oc9L+AStqBHiKA==;EndpointSuffix=core.windows.net"; // Debes reemplazar con tu cadena de conexión real
-                string containerName = "generalcontainer";
-                string blobName = "Document.docx";
-
-                BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
-                BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
-                BlobClient blobClient = containerClient.GetBlobClient(blobName);
-                var exits = await blobClient.ExistsAsync();
-                if (exits)
-                {
-                    BlobDownloadInfo blobDownloadInfo = await blobClient.DownloadAsync();
-                    MemoryStream memoryStream = new MemoryStream();
-                    await blobDownloadInfo.Content.CopyToAsync(memoryStream);
-                    byte[] blobBytes = memoryStream.ToArray();
-                    var contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-                    return File(blobBytes, contentType, "Data.xlsx");
-
-
-                }
-                else
-                {
-                    return NotFound("El archivo Excel no existe.");
-                }
-
+                var blob = await getBlobClient(connectionString, containerName, documentId);
+                BlobDownloadInfo blobDownloadInfo = await blob.DownloadAsync();
+                MemoryStream memoryStream = new MemoryStream();
+                await blobDownloadInfo.Content.CopyToAsync(memoryStream);
+                byte[] blobBytes = memoryStream.ToArray();
+                var contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                return File(blobBytes, contentType, "Data.xlsx");
             }
             catch (Exception ex)
             {

@@ -20,7 +20,6 @@ builder.Services.AddCors(options =>
                       });
 });
 
-
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -28,15 +27,23 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-app.UseAuthentication();
-app.UseAuthorization();
-
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+
+app.Use(async (context, next) =>
+{
+    string apiKey = context.Request.Headers["ApiKey"];
+
+    if (string.IsNullOrWhiteSpace(apiKey) || app.Configuration.GetSection("ApiKey").Value != apiKey)
+    {
+        context.Response.StatusCode = 401; // Unauthorized
+        await context.Response.WriteAsync("Invalid API Key");
+        return;
+    }
+
+    await next();
+});
 
 app.UseHttpsRedirection();
 

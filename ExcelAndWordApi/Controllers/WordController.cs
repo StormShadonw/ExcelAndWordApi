@@ -30,6 +30,7 @@ namespace ExcelAndWordApi.Controllers
                 MemoryStream memoryStream = new MemoryStream();
                 await blobDownloadInfo.Content.CopyToAsync(memoryStream);
                 var data = new List<List<object>>();
+                memoryStream.Position = 0;
                 using (var doc = DocX.Load(memoryStream))
                 {
                     string[] textToBeReplaced = new string[] {
@@ -59,6 +60,7 @@ namespace ExcelAndWordApi.Controllers
                     body.EmpresaEmail,
                     body.EmpresaDireccion,
                     body.Ciudad,
+                    body.Departamento,
                     body.Pais,
                     body.NoOficio,
                     body.NoFolio,
@@ -71,10 +73,9 @@ namespace ExcelAndWordApi.Controllers
                     {
                         doc.ReplaceText(textToBeReplaced[c], textToReplace[c]);
                     }
-
-                    // Guardar el documento modificado en memoria
-                    using (var stream = new MemoryStream())
+                    try
                     {
+                        var stream = new MemoryStream();
                         doc.SaveAs(stream);
 
                         var split = documentName.Split(".");
@@ -87,10 +88,16 @@ namespace ExcelAndWordApi.Controllers
                         await newContainerClient.CreateIfNotExistsAsync(publicAccessType: PublicAccessType.BlobContainer);
                         BlobClient newBlobClient = newContainerClient.GetBlobClient(newBlobName);
                         await newBlobClient.StartCopyFromUriAsync(blob.Uri);
+                        stream.Position = 0;
                         newBlobClient.Upload(stream, overwrite: true);
                         var contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                        stream.Position = 0;
                         return File(stream, contentType, newBlobName);
+                    } catch(Exception ex)
+                    {
+                        return BadRequest($"Error al leer el archivo Word: {ex.Message}");
                     }
+                    
 
                 }
 
